@@ -1,6 +1,6 @@
 # mcp-banxico-sie
 
-Python MCP (Model Context Protocol) server for querying key macroeconomic indicators from Banco de México ([SIE-API](https://www.banxico.org.mx/SieAPIRest/service/v1/)): policy rate, TIIE, 28-day Cetes, UDIS and inflation-variation estimates.
+Python MCP (Model Context Protocol) server for querying key macroeconomic indicators from Banco de México ([SIE-API](https://www.banxico.org.mx/SieAPIRest/service/v1/)): rates, UDIS, USD and FX, minimum wage, reserves, public finances, SPEI and inflation expectations. 17 read-only tools.
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![MCP](https://img.shields.io/badge/MCP-stdio%20%7C%20Streamable--HTTP-green)
@@ -47,15 +47,44 @@ Add the server to your client's `mcpServers` configuration:
 
 ---
 
-## Available tools
+## Available tools (17, read-only)
+
+### Rates and cost of money
 
 | Tool | Parameters | Description / Series queried |
 | --- | --- | --- |
 | `get_tasa_hoy` | *None* | Timely single-batch query: Target Rate (`SF61745`), 28-day TIIE (`SF60648`), 91-day TIIE (`SF60649`) and 28-day Cetes (`SF60633`). |
 | `get_tasas_rango` | `fecha_ini`, `fecha_fin` | Historical range ($\le$ 365 days). Summarizes each series (min/max/change) and computes the 28-day TIIE vs. Cetes spread. |
+| `get_curva_tiie` | *None* | TIIE curve in one pack: 1-day Fondeo (`SF331451`) + 28/91/182-day TIIE (`SF60648`/`SF60649`/`SF111916`). |
+| `estimar_rendimiento_cetes` | `monto_mxn` | Estimates 28-day yield with the latest weekly 28-day Cetes auction (not guaranteed). |
+
+### UDIS, inflation and real value
+
+| Tool | Parameters | Description / Series queried |
+| --- | --- | --- |
 | `get_udis_hoy` | *None* | Current UDI value (`SP68257`), handling Banxico's official advance publication. |
 | `convertir_udis_a_pesos` | `monto_udis`, `fecha` (`YYYY-MM-DD`) | Converts a UDIS amount to national currency at the official value on the given date. |
 | `get_inflacion_udis` | `fecha_ini`, `fecha_fin` | Computes the UDI percentage change over the period as an inflation estimate. |
+| `get_inflacion_ytd` | *None* | Year-to-date inflation in one click (UDIS from January 1st to today). |
+| `ajustar_por_udis` | `monto`, `fecha_ini`, `fecha_fin` | Adjusts any amount (rent, debt, salary) by UDIS between two dates. |
+
+### USD and foreign exchange
+
+| Tool | Parameters | Description / Series queried |
+| --- | --- | --- |
+| `get_dolar_hoy` | *None* | Timely FIX (`SF43718`) + settlement (`SF60653`) with 30-day FIX context (avg/min/max). |
+| `get_divisas_rango` | `fecha_ini`, `fecha_fin` | Euro (`SF46410`), yen (`SF46406`), pound (`SF46407`) and Canadian dollar (`SF60632`) with % change. |
+| `convertir_mxn_divisa` | `monto_mxn`, `divisa`, `fecha` (`YYYY-MM-DD`) | Converts MXN to USD/EUR/JPY/GBP/CAD at the exact-date exchange rate. |
+
+### Wages, reserves, public finances, SPEI and expectations
+
+| Tool | Parameters | Description / Series queried |
+| --- | --- | --- |
+| `get_salario_minimo` | *None* | Current minimum wage (`SL11298`) + latest hike ($ and %), with monthly-lag note. |
+| `get_reservas` | *None* | International reserves (`SF43707`): latest weekly figure + weekly and annual change. |
+| `get_finanzas_publicas` | `fecha_ini`, `fecha_fin` | Primary spending (`SG59`) + income tax (`SG80`) + VAT (`SG81`) + IEPS (`SG79`/`SG55`) in monthly range. |
+| `get_spei` | `fecha_ini`, `fecha_fin` | Monthly SPEI: sent amount/count (`SF406262`/`SF406263`) + received amount (`SF406458`). |
+| `get_expectativa_inflacion` | *None* | Year-end inflation expected by specialists (`SR14138`, mean). |
 
 ---
 
