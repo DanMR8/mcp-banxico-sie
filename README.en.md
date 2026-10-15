@@ -1,91 +1,169 @@
-# mcp-banxico-sie — Banxico SIE-API as MCP Tools
+# mcp-banxico-sie
 
-![Python](https://img.shields.io/badge/python-3.11-blue)
-![MCP](https://img.shields.io/badge/MCP-stdio%20%2B%20streamable--http-green)
+Python MCP (Model Context Protocol) server for querying key macroeconomic indicators from Banco de México ([SIE-API](https://www.banxico.org.mx/SieAPIRest/service/v1/)): policy rate, TIIE, 28-day Cetes, UDIS and inflation-variation estimates.
+
+![Python](https://img.shields.io/badge/python-3.11+-blue)
+![MCP](https://img.shields.io/badge/MCP-stdio%20%7C%20Streamable--HTTP-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 [![CI](https://github.com/DanMR8/mcp-banxico-sie/actions/workflows/ci.yml/badge.svg)](https://github.com/DanMR8/mcp-banxico-sie/actions)
 
 **[Versión en español →](README.md)**
 
-**Give your AI assistant live access to Banxico's official rates and UDI values.**
-Python MCP server for [Banxico's SIE-API](https://www.banxico.org.mx/SieAPIRest/service/v1/):
-policy rate, TIIE, 28-day Cetes, UDIS and MXN conversion — with quota handling,
-caching and actionable errors.
+---
 
-```powershell
-# Claude Desktop, MCP Inspector, or any MCP client
-$env:BANXICO_TOKEN="your-64-char-token"   # https://www.banxico.org.mx/SieAPIRest/service/v1/token
-python -m mcp_banxico_sie.server          # local stdio: 5 tools, zero extra setup
+## Highlights
+
+- **Use-case-oriented tools:** No 1:1 endpoint exposure. It groups queries to answer real financial questions (e.g. TIIE–Cetes spread or direct UDI/MXN conversions).
+- **Strict quota control (quota-aware):** Per-call series packing against the SIE ($\le$ 20 series per request), in-memory cache (12 h for timely series, 7 d for metadata) and time-range caps ($\le$ 365 days).
+- **Banxico edge-case handling:** Tolerates the weekly Cetes auction lag (2–5 days) and reports the advance UDIS publication with a clarifying note instead of failing.
+- **Dual transport:** Native `stdio` support (local clients from any vendor) and `streamable-http` (remote container deployments).
+
+---
+
+## MCP client setup
+
+Works with any MCP client (Claude Desktop, Cursor, Codex, OpenCode, MCP Inspector, ...).
+Add the server to your client's `mcpServers` configuration:
+
+### Via local virtual environment
+
+```json
+{
+  "mcpServers": {
+    "banxico-sie": {
+      "command": "C:\\path\\to\\project\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "mcp_banxico_sie.server"],
+      "env": {
+        "BANXICO_TOKEN": "your_64_char_token"
+      }
+    }
+  }
+}
 ```
 
-## What you can ask
+*(On macOS/Linux, replace the executable path with `/path/to/project/.venv/bin/python`)*.
 
-- *"What are today's policy rate and 28-day TIIE?"* → `get_tasa_hoy` (4 series in 1 call)
-- *"TIIE–Cetes spread for the last quarter"* → `get_tasas_rango` (with last policy-rate change)
-- *"How much are 10,000 UDIS in pesos on October 1st?"* → `convertir_udis_a_pesos`
-- *"Accumulated inflation last month per UDIS"* → `get_inflacion_udis`
+> **SIE token:** You can get one free and instantly from the [Banxico developer portal](https://www.banxico.org.mx/SieAPIRest/service/v1/token).
 
-## The 5 tools (read-only)
+---
 
-| Tool | What it does |
-|---|---|
-| `get_tasa_hoy` | Policy rate (SF61745) + TIIE 28/91 (SF60648/SF60649) + 28-day Cetes (SF60633) in 1 call |
-| `get_tasas_rango` | Range up to 365 days + TIIE28−Cetes28 spread and last policy-rate change |
-| `get_udis_hoy` | Latest UDIS value SP68257 (a future date is official advance publication) |
-| `convertir_udis_a_pesos` | UDIS amount → MXN on exact date `yyyy-MM-dd` |
-| `get_inflacion_udis` | UDIS % change over the period as an inflation proxy |
+## Available tools
 
-## Why this MCP
+| Tool | Parameters | Description / Series queried |
+| --- | --- | --- |
+| `get_tasa_hoy` | *None* | Timely single-batch query: Target Rate (`SF61745`), 28-day TIIE (`SF60648`), 91-day TIIE (`SF60649`) and 28-day Cetes (`SF60633`). |
+| `get_tasas_rango` | `fecha_ini`, `fecha_fin` | Historical range ($\le$ 365 days). Summarizes each series (min/max/change) and computes the 28-day TIIE vs. Cetes spread. |
+| `get_udis_hoy` | *None* | Current UDI value (`SP68257`), handling Banxico's official advance publication. |
+| `convertir_udis_a_pesos` | `monto_udis`, `fecha` (`YYYY-MM-DD`) | Converts a UDIS amount to national currency at the official value on the given date. |
+| `get_inflacion_udis` | `fecha_ini`, `fecha_fin` | Computes the UDI percentage change over the period as an inflation estimate. |
 
-| Differentiator | Detail |
-|---|---|
-| Task-oriented, not 1:1 wrappers | Each tool answers a real question (timely pack, spread, inflation proxy) |
-| Evidence-driven design | 3 characterization scripts + JSON findings shaped every client guard |
-| Quota-aware | Pack of ≤20 IDs, caching (timely 12 h, metadata 7 d), client-side counter, 365-day cap |
-| API quirks already handled | Weekly Cetes with 2–5 day lag, future-dated UDIS, inverted range → "no data" |
-| Dual transport | Local stdio (Claude Desktop, Inspector) + remote Streamable HTTP (Docker) |
+---
 
-## Setup (`.venv` + `pip`, no `uv`)
+## Local install and run
 
-```powershell
+### Prerequisites
+
+* Python 3.11 or higher.
+* An active Banxico API token.
+
+### 1. Clone and prepare the environment
+
+```bash
+git clone https://github.com/DanMR8/mcp-banxico-sie.git
+cd mcp-banxico-sie
+
+# Create virtual environment
 python -m venv .venv
+
+# Activate on Windows (PowerShell):
 .\.venv\Scripts\Activate.ps1
+# Or on Linux/macOS:
+source .venv/bin/activate
+
+# Install dependencies in editable mode
 pip install -e ".[dev]"
 ```
 
-Token (64 chars, free with captcha; generated once and reused):
-https://www.banxico.org.mx/SieAPIRest/service/v1/token → `$env:BANXICO_TOKEN`
-(never in code; see `.env.example`).
-Quotas: timely 80/min–40k/day, historic 200/5min–10k/day. The implementation
-follows the [official query limits](https://www.banxico.org.mx/SieAPIRest/service/v1/doc/limiteConsultas):
-≤20 IDs per pack, caching, and a 365-day range cap.
+### 2. Set environment variables
 
-## Usage
+Copy the template and add your token:
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-$env:BANXICO_TOKEN="your-64-char-token"
-python -m mcp_banxico_sie.server                 # stdio (Claude Desktop, Inspector)
-$env:MCP_TRANSPORT="http"; $env:PORT="8000"; python -m mcp_banxico_sie.server  # remote Streamable HTTP
+```bash
+cp .env.example .env
 ```
 
-**Claude Desktop / Inspector (local):** use `mcp.json` as reference — it points to
-the `.venv` Python; just replace the token.
-**Remote (Docker):** `docker build -t mcp-banxico-sie .`, serve with `MCP_TRANSPORT=http`.
+Or export it in your terminal:
 
-## Quality
+```bash
+# PowerShell
+$env:BANXICO_TOKEN="your_token_here"
 
-- Tests with real API data (mocks, no quota spent): `python -m pytest tests/ -q`
-- Lint: `ruff check src/ tests/` · CI on every push (`/.github/workflows/ci.yml`)
-- Layout: `src/mcp_banxico_sie/{config,client,tools,server}.py`, evidence in `characterization/`
+# Bash/Zsh
+export BANXICO_TOKEN="your_token_here"
+```
 
-## Data source
+### 3. Run the server
 
-Data: Banco de México, [SIE-API](https://www.banxico.org.mx/SieAPIRest/service/v1/),
-reproduced under its [use disclaimer](https://www.banxico.org.mx/footer-es/salvedad-politicas-uso-banco-.html)
-(with attribution in every response). Independent project, not affiliated with
-or endorsed by Banxico.
+**stdio mode (local MCP-capable clients):**
+
+```bash
+python -m mcp_banxico_sie.server
+```
+
+**Streamable HTTP mode (remote or containers):**
+
+```bash
+# PowerShell
+$env:MCP_TRANSPORT="http"
+$env:PORT="8000"
+python -m mcp_banxico_sie.server
+
+# Bash/Zsh
+MCP_TRANSPORT=http PORT=8000 python -m mcp_banxico_sie.server
+```
+
+---
+
+## Docker run
+
+To run the server as an isolated HTTP service:
+
+```bash
+docker build -t mcp-banxico-sie .
+docker run -d -p 8000:8000 -e BANXICO_TOKEN="your_token" -e MCP_TRANSPORT="http" mcp-banxico-sie
+```
+
+---
+
+## Technical and architecture decisions
+
+1. **Request batching:** Banxico's API accepts up to 20 series identifiers in a single REST call (`/series/{id1},{id2}/datos`). The client uses this to resolve tools like `get_tasa_hoy` in one network transaction.
+2. **Async-series resilience:** Cetes rates update weekly by auction while TIIE is daily. The client normalizes and aligns the time series to avoid failures when a series has no record on the exact queried date.
+3. **Quota handling:** Local in-memory TTLs mitigate request consumption against the official SIE caps (80 req/min for timely series; 200 req/5 min for historic series). See [official query limits](https://www.banxico.org.mx/SieAPIRest/service/v1/doc/limiteConsultas).
+4. **Zero-quota testing:** The test suite uses a fake client with real API values (inline mocks, no network), so full CI runs via `pytest` without spending token quota.
+
+---
+
+## Development and testing
+
+Run the test suite:
+
+```bash
+pytest tests/ -v
+```
+
+Style check:
+
+```bash
+ruff check src/ tests/
+```
+
+---
+
+## Legal attribution
+
+Financial data from Banco de México via the Sistema de Información Económica ([SIE-API](https://www.banxico.org.mx/SieAPIRest/service/v1/)). This is an independent open-source implementation with no official affiliation or sponsorship from Banxico. Data is used under Banco de México's terms and [use disclaimer](https://www.banxico.org.mx/footer-es/salvedad-politicas-uso-banco-.html).
 
 ## License
 
-MIT — see `LICENSE`.
+Distributed under the MIT license — see `LICENSE`.
