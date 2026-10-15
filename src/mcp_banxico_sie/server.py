@@ -48,6 +48,66 @@ def _register():
         """Variacion % UDIS en periodo (proxy inflacion). / UDIS inflation proxy."""
         return await T.get_inflacion_udis(fecha_ini, fecha_fin, BanxicoClient())
 
+    @mcp.tool()
+    async def get_dolar_hoy() -> dict:
+        """Dolar hoy: FIX + DOF con contexto 30 dias. / USD today with 30d context."""
+        return await T.get_dolar_hoy(BanxicoClient())
+
+    @mcp.tool()
+    async def get_divisas_rango(fecha_ini: str, fecha_fin: str) -> dict:
+        """Euro, yen, libra y dolar canadiense en rango (yyyy-MM-dd). / EUR/JPY/GBP/CAD range."""
+        return await T.get_divisas_rango(fecha_ini, fecha_fin, BanxicoClient())
+
+    @mcp.tool()
+    async def convertir_mxn_divisa(monto_mxn: float, divisa: str, fecha: str) -> dict:
+        """Convierte pesos a divisa (USD/EUR/JPY/GBP/CAD) a fecha exacta. / MXN to FX."""
+        return await T.convertir_mxn_divisa(monto_mxn, divisa, fecha, BanxicoClient())
+
+    @mcp.tool()
+    async def get_inflacion_ytd() -> dict:
+        """Inflacion acumulada del anio en un clic (UDIS 1-ene a hoy). / Year-to-date inflation."""
+        return await T.get_inflacion_ytd(BanxicoClient())
+
+    @mcp.tool()
+    async def estimar_rendimiento_cetes(monto_mxn: float) -> dict:
+        """Estima rendimiento a 28 dias con la ultima subasta de Cetes. / Cetes estimate."""
+        return await T.estimar_rendimiento_cetes(monto_mxn, BanxicoClient())
+
+    @mcp.tool()
+    async def ajustar_por_udis(monto: float, fecha_ini: str, fecha_fin: str) -> dict:
+        """Actualiza renta/deuda/sueldo por UDIS entre fechas. / UDIS adjustment."""
+        return await T.ajustar_por_udis(monto, fecha_ini, fecha_fin, BanxicoClient())
+
+    @mcp.tool()
+    async def get_salario_minimo() -> dict:
+        """Salario minimo vigente + ultimo incremento. / Current minimum wage."""
+        return await T.get_salario_minimo(BanxicoClient())
+
+    @mcp.tool()
+    async def get_reservas() -> dict:
+        """Reservas internacionales con variacion semanal y anual. / FX reserves."""
+        return await T.get_reservas(BanxicoClient())
+
+    @mcp.tool()
+    async def get_curva_tiie() -> dict:
+        """Curva TIIE: fondeo 1d + 28/91/182 en un lote. / TIIE curve."""
+        return await T.get_curva_tiie(BanxicoClient())
+
+    @mcp.tool()
+    async def get_finanzas_publicas(fecha_ini: str, fecha_fin: str) -> dict:
+        """Gasto + ISR + IVA + IEPS en rango (yyyy-MM-dd). / Public finances."""
+        return await T.get_finanzas_publicas(fecha_ini, fecha_fin, BanxicoClient())
+
+    @mcp.tool()
+    async def get_spei(fecha_ini: str, fecha_fin: str) -> dict:
+        """SPEI mensual en rango (yyyy-MM-dd). / SPEI transfers."""
+        return await T.get_spei(fecha_ini, fecha_fin, BanxicoClient())
+
+    @mcp.tool()
+    async def get_expectativa_inflacion() -> dict:
+        """Inflacion esperada por especialistas al cierre del anio. / Expected inflation."""
+        return await T.get_expectativa_inflacion(BanxicoClient())
+
 
 _register()
 

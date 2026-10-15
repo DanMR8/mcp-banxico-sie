@@ -1,7 +1,7 @@
 [project]
 name = "mcp-banxico-sie"
 version = "0.1.0"
-description = "MCP para Banxico SIE-API enfocado en Tasas (B) y UDIS (C). ES+EN."
+description = "MCP para Banxico SIE-API: tasas, UDIS, divisas, salario, reservas y mas (17 tools). ES+EN."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

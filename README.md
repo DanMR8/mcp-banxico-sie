@@ -1,6 +1,6 @@
 # mcp-banxico-sie
 
-Servidor MCP (Model Context Protocol) en Python para consultar indicadores macroeconómicos clave del Banco de México ([SIE-API](https://www.banxico.org.mx/SieAPIRest/service/v1/)): tasa objetivo, TIIE, Cetes 28, UDIS y cálculo de variaciones inflacionarias.
+Servidor MCP (Model Context Protocol) en Python para consultar indicadores macroeconómicos clave del Banco de México ([SIE-API](https://www.banxico.org.mx/SieAPIRest/service/v1/)): tasas, UDIS, dólar y divisas, salario mínimo, reservas, finanzas públicas, SPEI y expectativas de inflación. 17 herramientas solo-lectura.
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![MCP](https://img.shields.io/badge/MCP-stdio%20%7C%20Streamable--HTTP-green)
@@ -47,15 +47,44 @@ Agrega el servidor a la configuración `mcpServers` de tu cliente:
 
 ---
 
-## Herramientas disponibles (Tools)
+## Herramientas disponibles (17 Tools, solo lectura)
+
+### Tasas y costo del dinero
 
 | Herramienta | Parámetros | Descripción / Series consultadas |
 | --- | --- | --- |
 | `get_tasa_hoy` | *Ninguno* | Consulta oportuna en un solo lote: Tasa Objetivo (`SF61745`), TIIE 28 (`SF60648`), TIIE 91 (`SF60649`) y Cetes 28 (`SF60633`). |
 | `get_tasas_rango` | `fecha_ini`, `fecha_fin` | Rango histórico ($\le$ 365 días). Resume cada serie (min/max/variación) y calcula el spread TIIE 28 vs. Cetes 28. |
+| `get_curva_tiie` | *Ninguno* | Curva TIIE en un lote: Fondeo 1 día (`SF331451`) + TIIE 28/91/182 (`SF60648`/`SF60649`/`SF111916`). |
+| `estimar_rendimiento_cetes` | `monto_mxn` | Estima el rendimiento a 28 días con la última subasta semanal de Cetes 28 (no garantizado). |
+
+### UDIS, inflación y valor real
+
+| Herramienta | Parámetros | Descripción / Series consultadas |
+| --- | --- | --- |
 | `get_udis_hoy` | *Ninguno* | Valor vigente de la UDI (`SP68257`), gestionando la publicación oficial anticipada de Banxico. |
 | `convertir_udis_a_pesos` | `monto_udis`, `fecha` (`YYYY-MM-DD`) | Convierte un importe en UDIS a moneda nacional según el valor oficial en la fecha indicada. |
 | `get_inflacion_udis` | `fecha_ini`, `fecha_fin` | Calcula la variación porcentual de la UDI en el periodo seleccionado como estimación de inflación. |
+| `get_inflacion_ytd` | *Ninguno* | Inflación acumulada del año en un clic (UDIS del 1 de enero a hoy). |
+| `ajustar_por_udis` | `monto`, `fecha_ini`, `fecha_fin` | Actualiza cualquier cantidad (renta, deuda, sueldo) por UDIS entre dos fechas. |
+
+### Dólar y divisas
+
+| Herramienta | Parámetros | Descripción / Series consultadas |
+| --- | --- | --- |
+| `get_dolar_hoy` | *Ninguno* | FIX (`SF43718`) + DOF (`SF60653`) oportuno con contexto FIX de 30 días (promedio/min/max). |
+| `get_divisas_rango` | `fecha_ini`, `fecha_fin` | Euro (`SF46410`), yen (`SF46406`), libra (`SF46407`) y dólar canadiense (`SF60632`) con variación %. |
+| `convertir_mxn_divisa` | `monto_mxn`, `divisa`, `fecha` (`YYYY-MM-DD`) | Convierte pesos a USD/EUR/JPY/GBP/CAD al tipo de cambio de la fecha exacta. |
+
+### Salario, reservas, finanzas públicas, SPEI y expectativas
+
+| Herramienta | Parámetros | Descripción / Series consultadas |
+| --- | --- | --- |
+| `get_salario_minimo` | *Ninguno* | Salario mínimo vigente (`SL11298`) + último incremento ($ y %), con nota de rezago mensual. |
+| `get_reservas` | *Ninguno* | Reservas internacionales (`SF43707`): último dato semanal + variación semanal y anual. |
+| `get_finanzas_publicas` | `fecha_ini`, `fecha_fin` | Gasto primario (`SG59`) + ISR (`SG80`) + IVA (`SG81`) + IEPS (`SG79`/`SG55`) en rango mensual. |
+| `get_spei` | `fecha_ini`, `fecha_fin` | SPEI mensual: monto/número de enviadas (`SF406262`/`SF406263`) + monto de recibidas (`SF406458`). |
+| `get_expectativa_inflacion` | *Ninguno* | Inflación que esperan los especialistas al cierre del año (`SR14138`, media). |
 
 ---
 
