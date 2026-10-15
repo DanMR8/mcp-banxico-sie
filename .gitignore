@@ -1,0 +1,13 @@
+__pycache__/
+.venv/
+.env
+*.pyc
+.pytest_cache/
+.ruff_cache/
+characterization/results/
+.idea/
+# Documentacion privada de trabajo: jamas se publica
+NOTAS_PRIVADAS.md
+*.egg-info/
+dist/
+build/

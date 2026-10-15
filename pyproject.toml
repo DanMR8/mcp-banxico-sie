@@ -1,0 +1,37 @@
+[project]
+name = "mcp-banxico-sie"
+version = "0.1.0"
+description = "MCP para Banxico SIE-API enfocado en Tasas (B) y UDIS (C). ES+EN."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "portafolio" }]
+dependencies = [
+  "mcp>=1.8",
+  "httpx>=0.28",
+  "pydantic>=2.0",
+  "python-dotenv>=1.0",
+  "starlette>=0.37",
+  "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.4", "respx>=0.22"]
+
+[project.scripts]
+mcp-banxico-sie = "mcp_banxico_sie.server:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+exclude = ["characterization/", ".venv/"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_banxico_sie"]
