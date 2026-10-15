@@ -4,7 +4,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
-characterization/results/
+characterization/
 .idea/
 # Documentacion privada de trabajo: jamas se publica
 NOTAS_PRIVADAS.md
