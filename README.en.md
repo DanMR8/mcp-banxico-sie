@@ -3,6 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![MCP](https://img.shields.io/badge/MCP-stdio%20%2B%20streamable--http-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+[![CI](https://github.com/DanMR8/mcp-banxico-sie/actions/workflows/ci.yml/badge.svg)](https://github.com/DanMR8/mcp-banxico-sie/actions)
 
 **[Versión en español →](README.md)**
 
