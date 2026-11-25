@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 from . import config
 from .client import BanxicoClient, SieError
-
 
 # Atribucion exigida por la salvedad de uso de Banxico: toda informacion
 # reproducida debe citar fuente + URL para verificacion de terceros.
