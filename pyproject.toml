@@ -7,22 +7,28 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "portafolio" }]
 dependencies = [
-  "mcp>=1.8",
-  "httpx>=0.28",
-  "pydantic>=2.0",
-  "python-dotenv>=1.0",
-  "starlette>=0.37",
-  "uvicorn>=0.30",
+  "mcp>=1.8,<3.0",
+  "httpx>=0.28,<1.0",
+  "pydantic>=2.0,<3.0",
+  "python-dotenv>=1.0,<2.0",
+  "starlette>=0.37,<1.0",
+  "uvicorn>=0.30,<1.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.4", "respx>=0.22"]
+dev = [
+  "pytest>=8,<10",
+  "pytest-asyncio>=0.23,<1.0",
+  "ruff>=0.4,<1.0",
+  "respx>=0.22,<1.0",
+]
 
 [project.scripts]
 mcp-banxico-sie = "mcp_banxico_sie.server:main"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 
 [tool.ruff]

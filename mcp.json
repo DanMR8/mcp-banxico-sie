@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "banxico-sie": {
-      "command": "E:/yo/portafolio/mcp-banxico-sie/.venv/Scripts/python.exe",
+      "command": "python",
       "args": ["-m", "mcp_banxico_sie.server"],
       "env": {
-        "BANXICO_TOKEN": "pon_aqui_tu_token_de_64_chars"
+        "BANXICO_TOKEN": "tu_token_de_64_caracteres"
       }
     }
   }

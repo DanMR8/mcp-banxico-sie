@@ -109,8 +109,8 @@ python -m venv .venv
 # O en Linux/macOS:
 source .venv/bin/activate
 
-# Instalar dependencias en modo editable
-pip install -e ".[dev]"
+# Instalar dependencias (modo usuario: solo lo necesario para ejecutar el servidor)
+pip install -e .
 ```
 
 ### 2. Configurar variables de entorno
@@ -131,7 +131,15 @@ $env:BANXICO_TOKEN="tu_token_aqui"
 export BANXICO_TOKEN="tu_token_aqui"
 ```
 
-### 3. Ejecutar el servidor
+### 3. Para desarrolladores: instalar dependencias adicionales
+
+Si planeas ejecutar pruebas o hacer cambios al código:
+
+```bash
+pip install -e ".[dev]"
+```
+
+### 4. Ejecutar el servidor
 
 **Modo stdio (clientes locales con soporte MCP):**
 

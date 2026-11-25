@@ -13,8 +13,12 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install (incl. dev)
-        run: pip install -e ".[dev]"
+        run: |
+          pip install -e ".[dev]"
+          pip install pytest-cov
+          python -m pip list
       - name: Tests (mocks, no Banxico quota used)
-        run: python -m pytest tests/ -q
+        run: |
+          python -m pytest tests/ -v --tb=short
       - name: Lint
         run: ruff check src/ tests/
