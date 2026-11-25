@@ -1,6 +1,11 @@
 """Config central. Token solo por env, nunca hardcodeado."""
 import os
 
+from dotenv import load_dotenv
+
+# Cargar .env (precedencia: env > .env)
+load_dotenv()
+
 BASE_URL = os.environ.get(
     "BANXICO_BASE_URL",
     "https://www.banxico.org.mx/SieAPIRest/service/v1",

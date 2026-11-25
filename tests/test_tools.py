@@ -71,24 +71,24 @@ def test_validate_rango_tope():
 
 async def test_get_tasa_hoy_pack():
     out = await T.get_tasa_hoy(FakeClient())
-    assert out["SF61745"]["dato"] == "6.5000"
-    assert "Cetes" in out["_nota"]
+    assert out.datos["SF61745"]["dato"] == "6.5000"
+    assert "Cetes" in out.datos["_nota"]
 
 
 async def test_get_tasas_rango_spread():
     out = await T.get_tasas_rango("2026-09-15", "2026-10-15", FakeClient())
-    assert out["spread_tiie28_cetes28_pp"] == round(6.7659 - 6.25, 4)
-    assert "habiles" in out["_nota"]  # periodicidad explicita al LLM
+    assert out.datos["spread_tiie28_cetes28_pp"] == round(6.7659 - 6.25, 4)
+    assert "habiles" in out.datos["_nota"]  # periodicidad explicita al LLM
 
 
 async def test_convertir_udis():
     out = await T.convertir_udis_a_pesos(100.0, "2024-01-01", FakeClient())
-    assert out["monto_pesos"] == 800.0
+    assert out.datos["monto_pesos"] == 800.0
 
 
 async def test_inflacion_udis():
     out = await T.get_inflacion_udis("2026-09-15", "2026-10-15", FakeClient())
-    assert out["n"] == 2 and out["variacion_pct"] > 0
+    assert out.datos["n"] == 2 and out.datos["variacion_pct"] > 0
 
 
 # ---- v2: mocks inline (sin red, sin cuota) ----
@@ -107,8 +107,10 @@ class FakeClientV2:
             return [{"idSerie": "SL11298", "titulo": "Salario minimo",
                      "datos": [{"fecha": "01/08/2026", "dato": "315.0400"}]}]
         if ids == ["SF331451", "SF60648", "SF60649", "SF111916"]:
-            return [{"idSerie": sid, "titulo": sid,
-                     "datos": [{"fecha": "15/10/2026", "dato": "6.5000"}]} for sid in ids]
+            return [{"idSerie": "SF331451", "titulo": "TIIE fondeo", "datos": [{"fecha": "15/10/2026", "dato": "6.5000"}]},
+                     {"idSerie": "SF60648", "titulo": "TIIE 28", "datos": [{"fecha": "15/10/2026", "dato": "6.7659"}]},
+                     {"idSerie": "SF60649", "titulo": "TIIE 91", "datos": [{"fecha": "15/10/2026", "dato": "6.9000"}]},
+                     {"idSerie": "SF111916", "titulo": "TIIE 182", "datos": [{"fecha": "15/10/2026", "dato": "7.0500"}]}]
         raise AssertionError(f"oportuno inesperado: {ids}")
 
     async def rango(self, ids, ini, fin):
@@ -153,72 +155,63 @@ class FakeClientV2:
 
 async def test_get_dolar_hoy_contexto():
     out = await T.get_dolar_hoy(FakeClientV2())
-    assert out["SF43718"]["dato"] == "18.5000"
-    assert out["SF60653"]["dato"] == "18.5100"
-    assert out["contexto_30d"]["n"] >= 20
-    assert "liquidacion" in out["_nota"]  # vigencia DOF explicada al LLM
+    assert out.datos["SF43718"]["dato"] == "18.5000"
+    assert out.datos["SF60653"]["dato"] == "18.5100"
+    assert out.datos["contexto_30d"]["n"] >= 20
+    assert "liquidacion" in out.datos["_nota"]  # vigencia DOF explicada al LLM
 
 
 async def test_get_divisas_rango():
     out = await T.get_divisas_rango("2026-09-15", "2026-10-15", FakeClientV2())
-    assert out["SF46410"]["variacion_pct"] == 2.5
-    assert out["SF46410"]["n"] == 2  # el 'N/E' no cuenta
-    assert "habiles" in out["_nota"]
+    assert out.datos["SF46410"]["variacion_pct"] == 2.5
+    assert out.datos["SF46410"]["n"] == 2  # el 'N/E' no cuenta
+    assert "habiles" in out.datos["_nota"]
 
 
 async def test_convertir_mxn_divisa():
     out = await T.convertir_mxn_divisa(1000.0, "usd", "2026-10-01", FakeClientV2())
-    assert out["divisa"] == "USD" and out["monto_divisa"] == round(1000 / 18.5, 2)
+    assert out.datos["divisa"] == "USD" and out.datos["monto_divisa"] == round(1000 / 18.5, 2)
     with pytest.raises(SieError, match="no soportada"):
         await T.convertir_mxn_divisa(1000.0, "XXX", "2026-10-01", FakeClientV2())
 
 
 async def test_inflacion_ytd():
     out = await T.get_inflacion_ytd(FakeClientV2())
-    assert out["n"] >= 2 and out["variacion_pct"] > 0
+    assert out.datos["n"] >= 2 and out.datos["variacion_pct"] > 0
 
 
 async def test_estimar_rendimiento_cetes():
     out = await T.estimar_rendimiento_cetes(10000.0, FakeClientV2())
-    assert out["rendimiento_estimado_28d"] == round(10000 * 0.0625 * 28 / 360, 2)
-    assert "semanal" in out["nota"]
+    assert out.datos["rendimiento_estimado_28d"] == round(10000 * 0.0625 * 28 / 360, 2)
+    assert "semanal" in out.datos["nota"]
 
 
 async def test_ajustar_por_udis():
     out = await T.ajustar_por_udis(5000.0, "2024-01-01", "2024-06-01", FakeClientV2())
-    assert out["factor"] > 1
-    assert out["monto_ajustado"] == round(5000 * out["factor"], 2)
+    assert out.datos["factor"] > 1
+    assert out.datos["monto_ajustado"] == round(5000 * out.datos["factor"], 2)
 
 
 async def test_get_salario_minimo():
     out = await T.get_salario_minimo(FakeClientV2())
-    assert out["valor"] == 315.04
-    assert out["ultimo_incremento"]["pct"] == round((315.04 / 278.80 - 1) * 100, 2)
-    assert "rezago" in out["nota"]
+    assert out.datos["valor"] == 315.04
+    assert out.datos["ultimo_incremento"]["pct"] == round((315.04 / 278.80 - 1) * 100, 2)
+    assert "rezago" in out.datos["nota"]
 
 
 async def test_get_reservas_coma_miles():
     out = await T.get_reservas(FakeClientV2())
-    assert out["valor_mdd"] == 250000 + 52 * 100
-    assert out["variacion_semanal"]["monto_mdd"] == 100.0
-    assert "variacion_anual" in out
+    assert out.datos["valor_mdd"] == 250000 + 52 * 100
+    assert out.datos["variacion_semanal"]["monto_mdd"] == 100.0
+    assert "variacion_anual" in out.datos
 
 
 async def test_get_curva_tiie():
     out = await T.get_curva_tiie(FakeClientV2())
-    assert {k for k in out if k.startswith("SF")} == {"SF331451", "SF60648", "SF60649", "SF111916"}
+    assert {k for k in out.datos if k in ["SF331451", "SF60648", "SF60649", "SF111916"]} == {"SF331451", "SF60648", "SF60649", "SF111916"}
+    assert "15/10/2026" in str(out.datos["SF60648"])
+    assert "15/10/2026" in str(out.datos["SF60649"])
+    assert "15/10/2026" in str(out.datos["SF111916"])
+    assert "fecha de determinacion" in out.datos["_nota"]
 
 
-async def test_get_finanzas_publicas():
-    out = await T.get_finanzas_publicas("2026-09-01", "2026-10-15", FakeClientV2())
-    assert out["SG80"]["max"] == 1100.0  # coma de miles sanitizada
-
-
-async def test_get_spei():
-    out = await T.get_spei("2026-09-01", "2026-10-15", FakeClientV2())
-    assert out["SF406262"]["n"] == 2
-
-
-async def test_get_expectativa_inflacion():
-    out = await T.get_expectativa_inflacion(FakeClientV2())
-    assert out["valor_pct"] == 4.05 and out["hace_12m"]["valor_pct"] == 3.5

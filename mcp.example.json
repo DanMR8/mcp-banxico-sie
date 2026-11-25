@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "banxico-sie": {
+      "command": "python",
+      "args": ["-m", "mcp_banxico_sie.server"],
+      "env": {
+        "BANXICO_TOKEN": "tu_token_de_64_caracteres"
+      }
+    }
+  }
+}

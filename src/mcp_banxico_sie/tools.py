@@ -1,20 +1,28 @@
 """Tools B (tasas) + C (UDIS). Todo read-only. ES+EN docstrings."""
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from . import config
 from .client import BanxicoClient, SieError
 
+# Atribucion exigida por la salvedad de uso de Banxico: toda informacion
+# reproducida debe citar fuente + URL para verificacion de terceros.
+FUENTE = "Banco de Mexico - https://www.banxico.org.mx/SieAPIRest/service/v1/"
+
+
+class ToolResponse(BaseModel):
+    """Respuesta estandarizada de todas las herramientas."""
+    datos: dict[str, Any] = Field(..., description="Datos de la consulta")
+    fuente: str = Field(default=FUENTE, description="Fuente de los datos")
+    nota: str | None = Field(None, description="Nota adicional o advertencia")
+
 
 class RangoIn(BaseModel):
     fecha_ini: str = Field(..., description="Inicio yyyy-MM-dd", pattern=r"^\d{4}-\d{2}-\d{2}$")
     fecha_fin: str = Field(..., description="Fin yyyy-MM-dd", pattern=r"^\d{4}-\d{2}-\d{2}$")
-
-
-# Atribucion exigida por la salvedad de uso de Banxico: toda informacion
-# reproducida debe citar fuente + URL para verificacion de terceros.
-FUENTE = "Banco de Mexico - https://www.banxico.org.mx/SieAPIRest/service/v1/"
 
 
 def _limpia_num(dato: str) -> str:
@@ -57,7 +65,7 @@ def _resumen_obs(datos: list[dict]) -> dict:
     }
 
 
-async def get_tasa_hoy(client: BanxicoClient | None = None) -> dict:
+async def get_tasa_hoy(client: BanxicoClient | None = None) -> ToolResponse:
     """Tasa de referencia hoy: objetivo + TIIE 28/91 + Cetes 28 en 1 llamada (ES: tasa hoy / EN: reference rates today)."""
     c = client or BanxicoClient()
     series = await c.oportuno([config.TASA_OBJETIVO, config.TIIE_28, config.TIIE_91, config.CETES_28])
@@ -66,11 +74,10 @@ async def get_tasa_hoy(client: BanxicoClient | None = None) -> dict:
         d = (s.get("datos") or [{}])[0]
         out[s.get("idSerie")] = {"titulo": s.get("titulo"), "fecha": d.get("fecha"), "dato": d.get("dato")}
     out["_nota"] = "Cetes es subasta semanal: su fecha suele ir 2-5 dias atras (medido 13/10 vs 15/10). TIIE solo habiles."
-    out["fuente"] = FUENTE
-    return out
+    return ToolResponse(datos=out)
 
 
-async def get_tasas_rango(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None = None) -> dict:
+async def get_tasas_rango(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None = None) -> ToolResponse:
     """Tasas en rango + spread TIIE28-Cetes y ultimo cambio de tasa objetivo (max 365d)."""
     c = client or BanxicoClient()
     series = await c.rango([config.TASA_OBJETIVO, config.TIIE_28, config.CETES_28], fecha_ini, fecha_fin)
@@ -85,23 +92,22 @@ async def get_tasas_rango(fecha_ini: str, fecha_fin: str, client: BanxicoClient 
             res["spread_tiie28_cetes28_pp"] = round(float(tiie) - float(cetes), 4)
     except (ValueError, TypeError):
         pass
-    res["fuente"] = FUENTE
     res["_nota"] = "Tasa objetivo y TIIE diarias (habiles); Cetes subasta semanal (pocos puntos)."
-    return res
+    return ToolResponse(datos=res, fuente=FUENTE)
 
 
-async def get_udis_hoy(client: BanxicoClient | None = None) -> dict:
+async def get_udis_hoy(client: BanxicoClient | None = None) -> ToolResponse:
     """Valor UDIS oportuno. OJO: Banxico publica UDIS a futuro (medido +10 dias)."""
     c = client or BanxicoClient()
     series = await c.oportuno([config.UDIS])
     s = series[0] if series else {}
     d = (s.get("datos") or [{}])[0]
-    return {"idSerie": config.UDIS, "titulo": s.get("titulo", "Valor de UDIS"),
-            "fecha": d.get("fecha"), "dato": d.get("dato"), "fuente": FUENTE,
-            "nota": "La fecha puede ser futura: es publicacion adelantada oficial, no error."}
+    return ToolResponse(datos={"idSerie": config.UDIS, "titulo": s.get("titulo", "Valor de UDIS"),
+             "fecha": d.get("fecha"), "dato": d.get("dato"),
+             "nota": "La fecha puede ser futura: es publicacion adelantada oficial, no error."}, fuente=FUENTE)
 
 
-async def convertir_udis_a_pesos(monto_udis: float, fecha: str, client: BanxicoClient | None = None) -> dict:
+async def convertir_udis_a_pesos(monto_udis: float, fecha: str, client: BanxicoClient | None = None) -> ToolResponse:
     """Convierte monto en UDIS a pesos con el valor de la fecha exacta (formato yyyy-MM-dd)."""
     if monto_udis <= 0:
         raise SieError("monto_udis debe ser > 0.")
@@ -111,27 +117,27 @@ async def convertir_udis_a_pesos(monto_udis: float, fecha: str, client: BanxicoC
     if not datos:
         raise SieError(f"Sin valor UDIS para {fecha} (fin de serie o fecha invalida).")
     valor = _obs_float(datos[0]["dato"])
-    return {"fecha": datos[0]["fecha"], "valor_udis": valor, "fuente": FUENTE,
-            "monto_udis": monto_udis, "monto_pesos": round(monto_udis * valor, 2)}
+    return ToolResponse(datos={"fecha": datos[0]["fecha"], "valor_udis": valor,
+             "monto_udis": monto_udis, "monto_pesos": round(monto_udis * valor, 2)}, fuente=FUENTE)
 
 
-async def get_inflacion_udis(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None = None) -> dict:
+# ---- v2: finanzas cotidianas + divisas (sin jerga, sin prediccion) ----
+
+async def get_inflacion_udis(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None = None) -> ToolResponse:
     """Variacion % UDIS en el periodo como proxy de inflacion acumulada (serie diaria continua)."""
     c = client or BanxicoClient()
     series = await c.rango([config.UDIS], fecha_ini, fecha_fin)
     datos = (series[0].get("datos") or []) if series else []
     if len(datos) < 2:
-        return {"n": len(datos), "fuente": FUENTE, "nota": "Se requieren >=2 observaciones."}
+        return ToolResponse(datos={"n": len(datos), "nota": "Se requieren >=2 observaciones."}, fuente=FUENTE)
     ini = _obs_float(datos[0]["dato"])
     fin_v = _obs_float(datos[-1]["dato"])
     var_pct = round((fin_v / ini - 1) * 100, 4)
-    return {"n": len(datos), "ini": datos[0], "fin": datos[-1], "variacion_pct": var_pct,
-            "fuente": FUENTE, "nota": "UDIS es diaria continua (31/31 medido); ideal para acumulados."}
+    return ToolResponse(datos={"n": len(datos), "ini": datos[0], "fin": datos[-1], "variacion_pct": var_pct,
+             "nota": "UDIS es diaria continua (31/31 medido); ideal para acumulados."}, fuente=FUENTE)
 
 
-# ---- v2: finanzas cotidianas + divisas (sin jerga, sin prediccion) ----
-
-async def get_dolar_hoy(client: BanxicoClient | None = None) -> dict:
+async def get_dolar_hoy(client: BanxicoClient | None = None) -> ToolResponse:
     """Dolar hoy: FIX + DOF oportuno con contexto FIX 30 dias (promedio/min/max). / USD today with 30d context."""
     from datetime import date, timedelta
     c = client or BanxicoClient()
@@ -149,13 +155,12 @@ async def get_dolar_hoy(client: BanxicoClient | None = None) -> dict:
          "min": min(vals), "max": max(vals),
          "variacion_pp": round(vals[-1] - vals[0], 4)} if vals else {"n": 0}
     )
-    out["fuente"] = FUENTE
     out["_nota"] = ("Contexto informativo, no recomendacion. FIX solo dias habiles; "
                     "DOF es fecha de liquidacion (publicacion adelantada oficial, puede ser futura).")
-    return out
+    return ToolResponse(datos=out, fuente=FUENTE)
 
 
-async def get_divisas_rango(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None = None) -> dict:
+async def get_divisas_rango(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None = None) -> ToolResponse:
     """Euro, yen, libra y dolar canadiense en rango con variacion %. / EUR/JPY/GBP/CAD range."""
     c = client or BanxicoClient()
     ids = [config.DIVISAS[k] for k in ("EUR", "JPY", "GBP", "CAD")]
@@ -168,13 +173,12 @@ async def get_divisas_rango(fecha_ini: str, fecha_fin: str, client: BanxicoClien
         if len(nums) >= 2:
             base["variacion_pct"] = round((nums[-1][1] / nums[0][1] - 1) * 100, 4)
         res[s.get("idSerie")] = {"titulo": s.get("titulo"), **base}
-    res["fuente"] = FUENTE
     res["_nota"] = "Diarias (habiles); 'N/E' = dia sin cotizacion y no cuenta."
-    return res
+    return ToolResponse(datos=res, fuente=FUENTE)
 
 
 async def convertir_mxn_divisa(monto_mxn: float, divisa: str, fecha: str,
-                               client: BanxicoClient | None = None) -> dict:
+                               client: BanxicoClient | None = None) -> ToolResponse:
     """Convierte pesos a divisa (USD/EUR/JPY/GBP/CAD) al tipo de cambio de la fecha exacta. / MXN to FX."""
     if monto_mxn <= 0:
         raise SieError("monto_mxn debe ser > 0.")
@@ -187,20 +191,19 @@ async def convertir_mxn_divisa(monto_mxn: float, divisa: str, fecha: str,
     if not datos:
         raise SieError(f"Sin tipo de cambio {div} para {fecha} (fin de semana/feriado o fecha invalida).")
     tc = _obs_float(datos[0]["dato"])
-    return {"fecha": datos[0]["fecha"], "divisa": div, "tipo_cambio": tc, "fuente": FUENTE,
-            "monto_mxn": monto_mxn, "monto_divisa": round(monto_mxn / tc, 2)}
+    return ToolResponse(datos={"fecha": datos[0]["fecha"], "divisa": div, "tipo_cambio": tc,
+             "monto_mxn": monto_mxn, "monto_divisa": round(monto_mxn / tc, 2)}, fuente=FUENTE)
 
 
-async def get_inflacion_ytd(client: BanxicoClient | None = None) -> dict:
+async def get_inflacion_ytd(client: BanxicoClient | None = None) -> ToolResponse:
     """Inflacion acumulada del anio en un clic: UDIS del 1 de enero a hoy. / Year-to-date UDIS inflation."""
     from datetime import date
     hoy = date.today()
     out = await get_inflacion_udis(f"{hoy.year}-01-01", hoy.isoformat(), client)
-    out["fuente"] = FUENTE
-    return out
+    return ToolResponse(datos=out.datos)
 
 
-async def estimar_rendimiento_cetes(monto_mxn: float, client: BanxicoClient | None = None) -> dict:
+async def estimar_rendimiento_cetes(monto_mxn: float, client: BanxicoClient | None = None) -> ToolResponse:
     """Estima cuanto daria el monto a 28 dias con la ultima subasta de Cetes 28. / Cetes savings estimate."""
     if monto_mxn <= 0:
         raise SieError("monto_mxn debe ser > 0.")
@@ -211,13 +214,13 @@ async def estimar_rendimiento_cetes(monto_mxn: float, client: BanxicoClient | No
         raise SieError("Sin dato oportuno de Cetes 28.")
     tasa = _obs_float(datos[0]["dato"])
     estimado = round(monto_mxn * (tasa / 100) * (28 / 360), 2)
-    return {"fecha_subasta": datos[0]["fecha"], "tasa_pct": tasa, "fuente": FUENTE,
-            "monto_mxn": monto_mxn, "rendimiento_estimado_28d": estimado,
-            "nota": "Estimacion con la ultima subasta semanal (plazo 28 dias, base 360). No garantizado."}
+    return ToolResponse(datos={"fecha_subasta": datos[0]["fecha"], "tasa_pct": tasa,
+             "monto_mxn": monto_mxn, "rendimiento_estimado_28d": estimado,
+             "nota": "Estimacion con la ultima subasta semanal (plazo 28 dias, base 360). No garantizado."}, fuente=FUENTE)
 
 
 async def ajustar_por_udis(monto: float, fecha_ini: str, fecha_fin: str,
-                           client: BanxicoClient | None = None) -> dict:
+                           client: BanxicoClient | None = None) -> ToolResponse:
     """Actualiza cualquier cantidad (renta, deuda, sueldo) por UDIS entre dos fechas. / UDIS adjustment."""
     if monto <= 0:
         raise SieError("monto debe ser > 0.")
@@ -225,18 +228,18 @@ async def ajustar_por_udis(monto: float, fecha_ini: str, fecha_fin: str,
     series = await c.rango([config.UDIS], fecha_ini, fecha_fin)
     datos = (series[0].get("datos") or []) if series else []
     if len(datos) < 2:
-        return {"n": len(datos), "fuente": FUENTE, "nota": "Se requieren >=2 observaciones."}
+        return ToolResponse(datos={"n": len(datos), "nota": "Se requieren >=2 observaciones."}, fuente=FUENTE)
     ini = _obs_float(datos[0]["dato"])
     fin_v = _obs_float(datos[-1]["dato"])
     factor = round(fin_v / ini, 6)
-    return {"n": len(datos), "ini": datos[0], "fin": datos[-1], "fuente": FUENTE,
-            "monto_original": monto, "factor": factor,
-            "monto_ajustado": round(monto * factor, 2)}
+    return ToolResponse(datos={"n": len(datos), "ini": datos[0], "fin": datos[-1],
+             "monto_original": monto, "factor": factor,
+             "monto_ajustado": round(monto * factor, 2)}, fuente=FUENTE)
 
 
 # ---- v3: salario minimo + reservas (lenguaje simple, con fecha del dato) ----
 
-async def get_salario_minimo(client: BanxicoClient | None = None) -> dict:
+async def get_salario_minimo(client: BanxicoClient | None = None) -> ToolResponse:
     """Salario minimo vigente + ultimo incremento ($ y %). / Current minimum wage."""
     from datetime import date, timedelta
     c = client or BanxicoClient()
@@ -247,7 +250,6 @@ async def get_salario_minimo(client: BanxicoClient | None = None) -> dict:
                          (hoy - timedelta(days=365)).isoformat(), hoy.isoformat())
     nums = _numericas((hist[0].get("datos") or []) if hist else [])
     out = {"valor": _obs_float(d.get("dato", "")), "fecha": d.get("fecha"),
-           "fuente": FUENTE,
            "nota": "Serie mensual con rezago (medido ~2.5 meses): la fecha indica la vigencia, no es 'de hoy'."}
     if len(nums) >= 2:
         for i in range(len(nums) - 1, 0, -1):  # ultimo cambio hacia atras
@@ -257,10 +259,10 @@ async def get_salario_minimo(client: BanxicoClient | None = None) -> dict:
                     "monto": round(nums[i][1] - nums[i - 1][1], 2),
                     "pct": round((nums[i][1] / nums[i - 1][1] - 1) * 100, 2)}
                 break
-    return out
+    return ToolResponse(datos=out, fuente=FUENTE)
 
 
-async def get_reservas(client: BanxicoClient | None = None) -> dict:
+async def get_reservas(client: BanxicoClient | None = None) -> ToolResponse:
     """Reservas internacionales: ultimo dato semanal + variacion semanal y anual. / FX reserves."""
     from datetime import date, timedelta
     c = client or BanxicoClient()
@@ -270,10 +272,10 @@ async def get_reservas(client: BanxicoClient | None = None) -> dict:
     datos = (series[0].get("datos") or []) if series else []
     nums = _numericas(datos)
     if len(nums) < 2:
-        return {"n": len(nums), "fuente": FUENTE, "nota": "Se requieren >=2 observaciones."}
+        return ToolResponse(datos={"n": len(nums), "nota": "Se requieren >=2 observaciones."}, fuente=FUENTE)
     ult_f, ult = nums[-1]
     ant_f, ant = nums[-2]
-    out = {"valor_mdd": ult, "fecha": ult_f, "fuente": FUENTE,
+    out = {"valor_mdd": ult, "fecha": ult_f,
            "variacion_semanal": {"fecha_previa": ant_f, "monto_mdd": round(ult - ant, 1),
                                  "pct": round((ult / ant - 1) * 100, 3)}}
     if len(nums) >= 52:
@@ -282,12 +284,12 @@ async def get_reservas(client: BanxicoClient | None = None) -> dict:
                                   "monto_mdd": round(ult - anual, 1),
                                   "pct": round((ult / anual - 1) * 100, 2)}
     out["nota"] = "Millones de USD, corte semanal. Informativo, no pronostico."
-    return out
+    return ToolResponse(datos=out, fuente=FUENTE)
 
 
 # ---- v4: curva, finanzas publicas, SPEI, expectativas ----
 
-async def get_curva_tiie(client: BanxicoClient | None = None) -> dict:
+async def get_curva_tiie(client: BanxicoClient | None = None) -> ToolResponse:
     """Curva TIIE en un lote: fondeo 1d + 28/91/182. / TIIE curve in one pack."""
     c = client or BanxicoClient()
     ids = [config.TIIE_FONDEO, config.TIIE_28, config.TIIE_91, config.TIIE_182]
@@ -296,13 +298,12 @@ async def get_curva_tiie(client: BanxicoClient | None = None) -> dict:
     for s in series:
         d = (s.get("datos") or [{}])[0]
         out[s.get("idSerie")] = {"titulo": s.get("titulo"), "fecha": d.get("fecha"), "dato": d.get("dato")}
-    out["fuente"] = FUENTE
     out["_nota"] = "Fondeo es overnight (dia habil anterior); resto fecha de determinacion."
-    return out
+    return ToolResponse(datos=out, fuente=FUENTE)
 
 
 async def get_finanzas_publicas(fecha_ini: str, fecha_fin: str,
-                                client: BanxicoClient | None = None) -> dict:
+                                client: BanxicoClient | None = None) -> ToolResponse:
     """Gasto primario + ISR + IVA + IEPS x2 en rango (mensual). / Public finances."""
     c = client or BanxicoClient()
     ids = [config.GASTO_PRIMARIO, config.ISR, config.IVA, config.IEPS_GAS, config.IEPS_OTRO]
@@ -310,12 +311,11 @@ async def get_finanzas_publicas(fecha_ini: str, fecha_fin: str,
     res: dict = {}
     for s in series:
         res[s.get("idSerie")] = {"titulo": s.get("titulo"), **_resumen_obs(s.get("datos") or [])}
-    res["fuente"] = FUENTE
     res["_nota"] = "Millones de pesos, mensual con rezago. Flujos de caja del Gobierno Federal."
-    return res
+    return ToolResponse(datos=res, fuente=FUENTE)
 
 
-async def get_spei(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None = None) -> dict:
+async def get_spei(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None = None) -> ToolResponse:
     """SPEI mensual: monto/numero enviadas + monto recibidas. / SPEI transfers."""
     c = client or BanxicoClient()
     ids = [config.SPEI_ENV_MONTO, config.SPEI_ENV_NUM, config.SPEI_REC_MONTO]
@@ -323,12 +323,11 @@ async def get_spei(fecha_ini: str, fecha_fin: str, client: BanxicoClient | None 
     res: dict = {}
     for s in series:
         res[s.get("idSerie")] = {"titulo": s.get("titulo"), **_resumen_obs(s.get("datos") or [])}
-    res["fuente"] = FUENTE
     res["_nota"] = "Mensual. Montos en millones de pesos."
-    return res
+    return ToolResponse(datos=res, fuente=FUENTE)
 
 
-async def get_expectativa_inflacion(client: BanxicoClient | None = None) -> dict:
+async def get_expectativa_inflacion(client: BanxicoClient | None = None) -> ToolResponse:
     """Inflacion que esperan los especialistas al cierre del anio (media). / Expected inflation."""
     from datetime import date, timedelta
     c = client or BanxicoClient()
@@ -338,9 +337,9 @@ async def get_expectativa_inflacion(client: BanxicoClient | None = None) -> dict
     datos = (series[0].get("datos") or []) if series else []
     nums = _numericas(datos)
     if not nums:
-        return {"n": 0, "fuente": FUENTE, "nota": "Sin observaciones."}
-    out = {"valor_pct": nums[-1][1], "fecha": nums[-1][0], "fuente": FUENTE,
+        return ToolResponse(datos={"n": 0, "nota": "Sin observaciones."}, fuente=FUENTE)
+    out = {"valor_pct": nums[-1][1], "fecha": nums[-1][0],
            "nota": "Media de especialistas del sector privado al cierre del anio en curso. Expectativa, no pronostico."}
     if len(nums) >= 12:
         out["hace_12m"] = {"fecha": nums[-12][0], "valor_pct": nums[-12][1]}
-    return out
+    return ToolResponse(datos=out, fuente=FUENTE)
